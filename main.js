@@ -15,8 +15,6 @@ Additionally, usage of TensorFlow was learned from Abishek Singh's "alexa-sign-l
 Author: Sufiyaan Nadeem
 */
 
-/*경민왔다감*/
-
 // Importing the k-Nearest Neighbors Algorithm
 import {
   KNNImageClassifier
@@ -689,7 +687,30 @@ class PredictionOutput {
     if (word == "start") {
       this.translationText.innerText += ' ';
     } else if (word == "stop") {
-      this.translationText.innerText += '.';
+      // 1. 번역된 전체 텍스트 만들기 (start/stop 제외)
+      const fullText = this.currentPredictedWords
+      .filter(w => w !== "start" && w !== "stop")
+      .join(' ') + '.';
+
+  // 2. 화면에도 전체 텍스트로 갱신
+  this.translationText.innerText = fullText;
+
+  // 3. 클립보드에 복사
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullText)
+          .then(() => {
+              console.log("클립보드에 저장 완료");
+              main.setStatusText("전체 텍스트 복사됨!", "copy");
+          });
+  } else {
+      // 구형 브라우저 대응
+      const el = document.createElement('textarea');
+      el.value = fullText;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+  }
     } else {
       this.translationText.innerText += ' ' + word;
     }
