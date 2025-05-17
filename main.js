@@ -15,6 +15,8 @@ Additionally, usage of TensorFlow was learned from Abishek Singh's "alexa-sign-l
 Author: Sufiyaan Nadeem
 */
 
+/*경민왔다감*/
+
 // Importing the k-Nearest Neighbors Algorithm
 import {
   KNNImageClassifier
