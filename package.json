@@ -2,6 +2,7 @@
   "name": "sign-language-translator",
   "version": "0.0.1",
   "license": "do what you want but try to give back",
+  "main": "server.js",
   "dependencies": {
     "deeplearn": "~0.5.0",
     "deeplearn-knn-image-classifier": "^0.3.0",
@@ -16,7 +17,7 @@
     "build": "browserify main.js -o dist/build.js"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "pre-commit": [
     "build"
