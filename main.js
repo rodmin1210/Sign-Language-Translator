@@ -629,6 +629,10 @@ The PredictionOutput class is responsible for turning the translated gesture int
 class PredictionOutput {
   async sendToRaspberryPi(text) {
    try {
+       if (!text || typeof text !== 'string' || text.trim().length === 0) {
+            console.log('No valid text to send');
+            return;
+        }
         console.log(`Sending to Raspberry Pi: "${text}"`);
         
         const response = await fetch('/api/send-to-pi', {
@@ -732,19 +736,19 @@ textOutput(word, gestureCard, gestureAccuracy) {
     } else if (word == "stop") {
         this.translationText.innerText += '.';
     
-        console.log("Stop gesture detected!");
-        console.log("Translation text:", this.translationText.innerText);
+    console.log("Stop gesture detected!");
     
-    // Send completed sentence to Raspberry Pi when "stop" gesture is detected
-        if (this.translationText.innerText.trim()) {
-        const completedText = this.translationText.innerText.trim();
+    // 안전한 텍스트 확인
+    const translationContent = this.translationText?.innerText;
+    if (translationContent && typeof translationContent === 'string' && translationContent.trim().length > 0) {
+        const completedText = translationContent.trim();
         console.log(`Completed sentence: "${completedText}"`);
         console.log("Calling sendToRaspberryPi...");
         
-        // Send to Raspberry Pi
+        // 라즈베리파이로 전송
         this.sendToRaspberryPi(completedText);
     } else {
-        console.log("No text to send - translation text is empty");
+        console.log("No valid text to send - translation text is empty or invalid");
     }
         
     } else {
