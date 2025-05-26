@@ -731,17 +731,21 @@ textOutput(word, gestureCard, gestureAccuracy) {
         this.translationText.innerText += ' ';
     } else if (word == "stop") {
         this.translationText.innerText += '.';
-        
-        // ★★★ 여기가 새로 추가된 부분 ★★★
-        // "stop" 제스처일 때 완성된 문장을 라즈베리파이로 전송
+    
+        console.log("Stop gesture detected!");
+        console.log("Translation text:", this.translationText.innerText);
+    
+    // Send completed sentence to Raspberry Pi when "stop" gesture is detected
         if (this.translationText.innerText.trim()) {
-            const completedText = this.translationText.innerText.trim();
-            console.log(`완성된 문장: "${completedText}"`);
-            
-            // 라즈베리파이로 전송
-            this.sendToRaspberryPi(completedText);
-        }
-        // ★★★ 새로 추가된 부분 끝 ★★★
+        const completedText = this.translationText.innerText.trim();
+        console.log(`Completed sentence: "${completedText}"`);
+        console.log("Calling sendToRaspberryPi...");
+        
+        // Send to Raspberry Pi
+        this.sendToRaspberryPi(completedText);
+    } else {
+        console.log("No text to send - translation text is empty");
+    }
         
     } else {
         this.translationText.innerText += ' ' + word;
