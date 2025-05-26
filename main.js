@@ -628,15 +628,15 @@ The PredictionOutput class is responsible for turning the translated gesture int
 */
 class PredictionOutput {
   async sendToRaspberryPi(text) {
-    try {
-        console.log(`라즈베리파이로 전송 중: "${text}"`);
+   try {
+        console.log(`Sending to Raspberry Pi: "${text}"`);
         
         const response = await fetch('/api/send-to-pi', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 text: text,
                 timestamp: new Date().toISOString()
             })
@@ -645,17 +645,17 @@ class PredictionOutput {
         const result = await response.json();
         
         if (result.success) {
-            console.log('✅ 라즈베리파이 전송 성공!');
-            // 성공 메시지를 화면에 표시할 수도 있습니다
-            this.setStatusText("라즈베리파이로 전송 완료!", "success");
+            console.log('Successfully sent to Raspberry Pi!');
+            // Call setStatusText through main instance
+            main.setStatusText("Successfully sent to Raspberry Pi!", "success");
         } else {
-            console.error('❌ 라즈베리파이 전송 실패:', result.error);
-            this.setStatusText("전송 실패: " + result.error, "error");
+            console.error('Failed to send to Raspberry Pi:', result.error);
+            main.setStatusText("Send failed: " + result.error, "error");
         }
         
     } catch (error) {
-        console.error('❌ 네트워크 오류:', error);
-        this.setStatusText("네트워크 오류: 서버 연결 실패", "error");
+        console.error('Network error:', error);
+        main.setStatusText("Network error: Server connection failed", "error");
     }
 }
   constructor() {
