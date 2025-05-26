@@ -13,7 +13,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 라즈베리파이4의 IP 주소와 포트 (환경변수로 설정)
-const RASPBERRY_PI_IP = process.env.RASPBERRY_PI_IP || '61.245.277.5';
+const RASPBERRY_PI_IP = process.env.RASPBERRY_PI_IP || '192.168.0.65';
 const RASPBERRY_PI_PORT = process.env.RASPBERRY_PI_PORT || '5000';
 
 // 미들웨어 설정
