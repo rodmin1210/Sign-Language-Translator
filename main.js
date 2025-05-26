@@ -599,22 +599,65 @@ class Main {
     })
   }
   /*This function sets the status text*/
-  setStatusText(status, type) { //make default type thing
+  setStatusText(status, type) {
     this.statusContainer.style.display = "block";
     this.statusText.innerText = status;
-    if (type == "copy") {
-      console.log("copy");
-      this.statusContainer.style.backgroundColor = "blue";
+    
+    // 타입에 따라 색상 변경
+    if (type === "success") {
+        this.statusContainer.style.backgroundColor = "green";
+    } else if (type === "error") {
+        this.statusContainer.style.backgroundColor = "red";
+    } else if (type === "copy") {
+        this.statusContainer.style.backgroundColor = "blue";
     } else {
-      this.statusContainer.style.backgroundColor = "black";
+        this.statusContainer.style.backgroundColor = "black";
     }
-  }
+    
+    // 3초 후에 상태 메시지 숨기기
+    if (type === "success" || type === "error") {
+        setTimeout(() => {
+            this.statusContainer.style.display = "none";
+        }, 3000);
+    }
+}
 }
 
 /*
 The PredictionOutput class is responsible for turning the translated gesture into text, gesture card, and speech output.
 */
 class PredictionOutput {
+  async sendToRaspberryPi(text) {
+    try {
+        console.log(`라즈베리파이로 전송 중: "${text}"`);
+        
+        const response = await fetch('/api/send-to-pi', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                text: text,
+                timestamp: new Date().toISOString()
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ 라즈베리파이 전송 성공!');
+            // 성공 메시지를 화면에 표시할 수도 있습니다
+            this.setStatusText("라즈베리파이로 전송 완료!", "success");
+        } else {
+            console.error('❌ 라즈베리파이 전송 실패:', result.error);
+            this.setStatusText("전송 실패: " + result.error, "error");
+        }
+        
+    } catch (error) {
+        console.error('❌ 네트워크 오류:', error);
+        this.setStatusText("네트워크 오류: 서버 연결 실패", "error");
+    }
+}
   constructor() {
     //Initializing variables for speech synthesis and output
     this.synth = window.speechSynthesis;
@@ -657,67 +700,76 @@ class PredictionOutput {
   }
 
   /*This function outputs the word using text and gesture cards*/
-  textOutput(word, gestureCard, gestureAccuracy) {
+ /*This function outputs the word using text and gesture cards*/
+textOutput(word, gestureCard, gestureAccuracy) {
     // If the word is start, clear translated text content
     if (word == 'start') {
-      this.clearPara();
-
-      setTimeout(() => {
-        // if no query detected after start is signed, clear para
-        if (this.currentPredictedWords.length == 1) {
-          this.clearPara();
-        }
-      }, this.waitTimeForQuery);
+        this.clearPara();
+        setTimeout(() => {
+            // if no query detected after start is signed, clear para
+            if (this.currentPredictedWords.length == 1) {
+                this.clearPara();
+            }
+        }, this.waitTimeForQuery);
     }
 
     // If first word is not start, return
     if (word != 'start' && this.currentPredictedWords.length == 0) {
-      return;
+        return;
     }
 
     // If word was already said in this query, return
     if (this.currentPredictedWords.includes(word)) {
-      return;
+        return;
     }
 
     // Add word to predicted words in this query
     this.currentPredictedWords.push(word);
-
+    
     // Depending on the word, display the text output
     if (word == "start") {
-      this.translationText.innerText += ' ';
+        this.translationText.innerText += ' ';
     } else if (word == "stop") {
-      this.translationText.innerText += '.';
+        this.translationText.innerText += '.';
+        
+        // ★★★ 여기가 새로 추가된 부분 ★★★
+        // "stop" 제스처일 때 완성된 문장을 라즈베리파이로 전송
+        if (this.translationText.innerText.trim()) {
+            const completedText = this.translationText.innerText.trim();
+            console.log(`완성된 문장: "${completedText}"`);
+            
+            // 라즈베리파이로 전송
+            this.sendToRaspberryPi(completedText);
+        }
+        // ★★★ 새로 추가된 부분 끝 ★★★
+        
     } else {
-      this.translationText.innerText += ' ' + word;
+        this.translationText.innerText += ' ' + word;
     }
 
     //Clone Gesture Card
     this.translatedCard.innerHTML = " ";
     var clonedCard = document.createElement("div");
     clonedCard.className = "trained-gestures";
-
     var gestName = gestureCard.childNodes[0].innerText;
     var gestureName = document.createElement("h5");
     gestureName.innerText = gestName;
     clonedCard.appendChild(gestureName);
-
     var gestureImg = document.createElement("canvas");
     gestureImg.className = "trained_image";
     gestureImg.getContext('2d').drawImage(gestureCard.childNodes[1], 0, 0, 400, 180);
     clonedCard.appendChild(gestureImg);
-
     var gestAccuracy = document.createElement("h7");
     gestAccuracy.innerText = "Confidence: " + gestureAccuracy + "%";
     clonedCard.appendChild(gestAccuracy);
-
     this.translatedCard.appendChild(clonedCard);
-
+    
     // If its not video call mode, speak out the user's word
     if (word != "start" && word != "stop") {
-      this.speak(word);
+        this.speak(word);
     }
-  }
+}
+
 
   /*This functions clears translation text and cards. Sets the previous predicted words to null*/
   clearPara() {
