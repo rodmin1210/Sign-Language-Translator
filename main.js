@@ -40,6 +40,8 @@ It controls the webcam, user interface, as well as initiates the output of predi
 class Main {
   constructor() {
     // Initialize variables for display as well as prediction purposes
+    this.lastPredictionTime = {}; // 각 단어별 마지막 예측 시간 저장
+    this.predictionDelay = 3000; // 3초 딜레이 (밀리초)
     this.exampleCountDisplay = [];
     this.checkMarks = [];
     this.gestureCards = [];
@@ -100,7 +102,6 @@ class Main {
 
     this.videoCallBtn = document.getElementById("videoCallBtn");
     this.videoCall = document.getElementById("videoCall");
-
     this.trainedCardsHolder = document.getElementById("trainedCardsHolder");
 
     // Start Translator function is called
@@ -459,7 +460,6 @@ class Main {
         this.videoContainer.className = "videoContainerPredict";
         this.videoContainer.style.border = "8px solid black";
 
-
         // Update stage and instruction info
         this.stageTitle.innerText = "Translate";
         this.stageInstruction.innerText = "Start Translating with your Start Gesture.";
@@ -498,37 +498,40 @@ class Main {
   predict() {
     this.now = Date.now();
     this.elapsed = this.now - this.then;
-
     if (this.elapsed > this.fpsInterval) {
-      this.then = this.now - this.elapsed % this.fpsInterval;
-      if (this.videoPlaying) {
-        const exampleCount = this.knn.getClassExampleCount();
-        const image = dl.fromPixels(this.video);
-
-        if (Math.max(...exampleCount) > 0) {
-          this.knn.predictClass(image)
-            .then((res) => {
-              for (let i = 0; i < words.length; i++) {
-                /*if gesture matches this word & is above threshold & isn't same as prev prediction
-                and is not stop gesture, return that word to the user*/
-                if (res.classIndex == i && res.confidences[i] > confidenceThreshold && res.classIndex != this.previousPrediction) { //  && res.classIndex != 1) {
-                  this.setStatusText("Status: Predicting!", "predict");
-
-                  // Send word to Prediction Output so it will display or speak out the word.
-                  this.predictionOutput.textOutput(words[i], this.gestureCards[i], res.confidences[i] * 100);
-
-                  // set previous prediction so it doesnt get called again
-                  this.previousPrediction = res.classIndex;
-                }
-              }
-            }).then(() => image.dispose())
-        } else {
-          image.dispose();
+        this.then = this.now - this.elapsed % this.fpsInterval;
+        if (this.videoPlaying) {
+            const exampleCount = this.knn.getClassExampleCount();
+            const image = dl.fromPixels(this.video);
+            if (Math.max(...exampleCount) > 0) {
+                this.knn.predictClass(image)
+                    .then((res) => {
+                        for (let i = 0; i < words.length; i++) {
+                            if (res.classIndex == i && res.confidences[i] > confidenceThreshold) {
+                                const currentTime = Date.now();
+                                const lastTime = this.lastPredictionTime[words[i]] || 0;
+                                const timeDifference = currentTime - lastTime;
+                                
+                                console.log(`단어: ${words[i]}, 신뢰도: ${res.confidences[i].toFixed(2)}, 딜레이: ${timeDifference}ms`);
+                                
+                                if (timeDifference > this.predictionDelay) {
+                                    console.log(`${words[i]} 예측 실행!`);
+                                    this.setStatusText("Status: Predicting!", "predict");
+                                    this.predictionOutput.textOutput(words[i], this.gestureCards[i], res.confidences[i] * 100);
+                                    this.lastPredictionTime[words[i]] = currentTime;
+                                } else {
+                                    const remainingTime = this.predictionDelay - timeDifference;
+                                    console.log(`${words[i]} 딜레이 중... 남은 시간: ${remainingTime}ms`);
+                                    this.setStatusText(`Wait ${Math.ceil(remainingTime/1000)}s for "${words[i]}"`, "predict");
+                                }
+                            }
+                        }
+                    }).then(() => image.dispose())
+            } else {
+                image.dispose();
+            }
         }
-      }
     }
-
-    // Recursion on predict method
     this.pred = requestAnimationFrame(this.predict.bind(this));
   }
 
@@ -579,7 +582,7 @@ class Main {
   /*This function displays the button that start video call.*/
   createVideoCallBtn() {
     // Display video call feed instead of normal webcam feed when video call btn is clicked
-    videoCallBtn.addEventListener('click', () => {
+    this.videoCallBtn.addEventListener('click', () => {
       this.stageTitle.innerText = "Video Call";
       this.stageInstruction.innerText = "Translate Gestures to talk to people on Video Call";
 
@@ -598,6 +601,7 @@ class Main {
       this.setStatusText("Status: Video Call Activated");
     })
   }
+
   /*This function sets the status text*/
   setStatusText(status, type) { //make default type thing
     this.statusContainer.style.display = "block";
@@ -658,96 +662,102 @@ class PredictionOutput {
 
   /*This function outputs the word using text and gesture cards*/
   textOutput(word, gestureCard, gestureAccuracy) {
-    // If the word is start, clear translated text content
+    console.log(`textOutput 호출: ${word}, 현재 배열:`, this.currentPredictedWords);
+    
+    // start 제스처 처리
     if (word == 'start') {
-      this.clearPara();
-
-      setTimeout(() => {
-        // if no query detected after start is signed, clear para
-        if (this.currentPredictedWords.length == 1) {
-          this.clearPara();
-        }
-      }, this.waitTimeForQuery);
+        this.clearPara();
+        this.currentPredictedWords.push(word); // start도 배열에 추가
+        this.translationText.innerText = '';
+        console.log(`start 제스처 처리됨, 배열:`, this.currentPredictedWords);
+        
+        // 제스처 카드 표시
+        this.displayGestureCard(gestureCard, gestureAccuracy);
+        return; // start는 화면에 표시하지 않음
     }
 
-    // If first word is not start, return
+    // 첫 단어가 start가 아니면 리턴
     if (word != 'start' && this.currentPredictedWords.length == 0) {
-      return;
+        console.log(`start 없이 ${word} 시도됨 - 무시`);
+        return;
     }
 
-    // If word was already said in this query, return
-    if (this.currentPredictedWords.includes(word)) {
-      return;
-    }
-
-    // Add word to predicted words in this query
-    this.currentPredictedWords.push(word);
-
-    // Depending on the word, display the text output
-    if (word == "start") {
-      this.translationText.innerText += ' ';
-    } else if (word == "stop") {
-      // 1. 번역된 전체 텍스트 만들기 (start/stop 제외)
-      const fullText = this.currentPredictedWords
-      .filter(w => w !== "start" && w !== "stop")
-      .join(' ') + '.';
-
-  // 2. 화면에도 전체 텍스트로 갱신
-  this.translationText.innerText = fullText;
-
-  // 3. 클립보드에 복사
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(fullText)
-          .then(() => {
-              console.log("클립보드에 저장 완료");
-              main.setStatusText("전체 텍스트 복사됨!", "copy");
-          });
-  } else {
-      // 구형 브라우저 대응
-      const el = document.createElement('textarea');
-      el.value = fullText;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-  }
+    // stop 처리
+    if (word == "stop") {
+        console.log(`stop 제스처 처리`);
+        // start를 제외한 단어들로 문장 구성
+        const wordsOnly = this.currentPredictedWords.filter(w => w !== "start");
+        const fullText = wordsOnly.join(' ') + '.';
+        this.translationText.innerText = fullText;
+        
+        // 클립보드 복사
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(fullText)
+                .then(() => {
+                    console.log("클립보드에 저장 완료");
+                    main.setStatusText("전체 텍스트 복사됨!", "copy");
+                });
+        }
+        
+        // 제스처 카드 표시
+        this.displayGestureCard(gestureCard, gestureAccuracy);
+        
+        // 세션 종료 후 배열 초기화
+        setTimeout(() => {
+            this.clearPara();
+        }, 2000);
+        
     } else {
-      this.translationText.innerText += ' ' + word;
+        // 일반 단어 처리
+        console.log(`일반 단어 ${word} 추가`);
+        this.currentPredictedWords.push(word);
+        
+        // start를 제외한 단어들만 화면에 표시
+        const wordsOnly = this.currentPredictedWords.filter(w => w !== "start");
+        this.translationText.innerText = wordsOnly.join(' ');
+        
+        // 제스처 카드 표시
+        this.displayGestureCard(gestureCard, gestureAccuracy);
+        
+        // 음성 출력
+        this.speak(word);
     }
+    
+    console.log(`처리 후 배열:`, this.currentPredictedWords);
+    console.log(`화면 텍스트:`, this.translationText.innerText);
+  }
 
-    //Clone Gesture Card
+  // 제스처 카드 표시 함수 분리
+  displayGestureCard(gestureCard, gestureAccuracy) {
     this.translatedCard.innerHTML = " ";
     var clonedCard = document.createElement("div");
     clonedCard.className = "trained-gestures";
-
     var gestName = gestureCard.childNodes[0].innerText;
     var gestureName = document.createElement("h5");
     gestureName.innerText = gestName;
     clonedCard.appendChild(gestureName);
-
-    var gestureImg = document.createElement("canvas");
-    gestureImg.className = "trained_image";
-    gestureImg.getContext('2d').drawImage(gestureCard.childNodes[1], 0, 0, 400, 180);
-    clonedCard.appendChild(gestureImg);
-
-    var gestAccuracy = document.createElement("h7");
-    gestAccuracy.innerText = "Confidence: " + gestureAccuracy + "%";
-    clonedCard.appendChild(gestAccuracy);
-
-    this.translatedCard.appendChild(clonedCard);
-
-    // If its not video call mode, speak out the user's word
-    if (word != "start" && word != "stop") {
-      this.speak(word);
+    
+    if (gestureCard.childNodes[1]) {
+      var gestureImg = document.createElement("canvas");
+      gestureImg.className = "trained_image";
+      gestureImg.getContext('2d').drawImage(gestureCard.childNodes[1], 0, 0, 400, 180);
+      clonedCard.appendChild(gestureImg);
     }
+    
+    var gestAccuracy = document.createElement("h7");
+    gestAccuracy.innerText = "Confidence: " + gestureAccuracy.toFixed(1) + "%";
+    clonedCard.appendChild(gestAccuracy);
+    this.translatedCard.appendChild(clonedCard);
   }
 
   /*This functions clears translation text and cards. Sets the previous predicted words to null*/
   clearPara() {
+    console.log(`clearPara 호출됨`);
     this.translationText.innerText = '';
     main.previousPrediction = -1;
     this.currentPredictedWords = []; // empty words in this query
     this.translatedCard.innerHTML = " ";
+    console.log(`clearPara 완료 - 배열 초기화됨`);
   }
 
   /*The function below is adapted from https://stackoverflow.com/questions/45071353/javascript-copy-text-string-on-click/53977796#53977796
