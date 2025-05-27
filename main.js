@@ -41,11 +41,11 @@ class Main {
   constructor() {
     // Initialize variables for display as well as prediction purposes
     this.lastPredictionTime = {}; // 각 단어별 마지막 예측 시간 저장
-    this.predictionDelay = 2000; // 2초 딜레이로 단축 (밀리초)
+    this.predictionDelay = 2000; // 2초 딜레이 (밀리초)
     this.gestureBuffer = {}; // 제스처 버퍼 추가
     this.bufferDuration = 500; // 500ms 버퍼 시간
     this.lastGestureTime = 0; // 마지막 제스처 감지 시간
-    this.gestureHoldTime = 300; // 제스처를 유지해야 하는 최소 시간 (ms)
+    this.gestureHoldTime = 1000; // 제스처를 유지해야 하는 최소 시간을 1초로 증가 (ms)
     
     this.exampleCountDisplay = [];
     this.checkMarks = [];
@@ -514,7 +514,7 @@ class Main {
     const buffer = this.gestureBuffer[word];
     const timeSinceFirst = currentTime - buffer.firstDetection;
     
-    // 제스처가 일정 시간 동안 지속적으로 감지되었는지 확인
+    // 제스처가 일정 시간 동안 지속적으로 감지되었는지 확인 (1초로 증가)
     if (timeSinceFirst >= this.gestureHoldTime) {
       buffer.detectionCount++;
       buffer.totalConfidence += confidence;
@@ -522,7 +522,7 @@ class Main {
       
       // 평균 신뢰도가 임계값을 넘고, 충분히 감지되었으면 안정적인 제스처로 판단
       const avgConfidence = buffer.totalConfidence / buffer.detectionCount;
-      if (avgConfidence > confidenceThreshold && buffer.detectionCount >= 3) {
+      if (avgConfidence > confidenceThreshold && buffer.detectionCount >= 5) { // 1초 동안 더 많은 감지 필요
         // 버퍼 초기화
         delete this.gestureBuffer[word];
         return true;
@@ -758,55 +758,60 @@ class PredictionOutput {
         return;
     }
 
-    // 첫 단어가 start가 아니면 리턴
-    if (word != 'start' && this.currentPredictedWords.length == 0) {
-        console.log(`start 없이 ${word} 시도됨 - 무시`);
-        return;
-    }
-
     // stop 처리
     if (word == "stop") {
         console.log(`stop 제스처 처리`);
-        // start를 제외한 단어들로 문장 구성
-        const wordsOnly = this.currentPredictedWords.filter(w => w !== "start");
-        const fullText = wordsOnly.join(' ') + (wordsOnly.length > 0 ? '.' : '');
-        this.translationText.innerText = fullText;
         
-        // 클립보드 복사 (텍스트가 있을 때만)
-        if (fullText.trim() && navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(fullText)
-                .then(() => {
-                    console.log("클립보드에 저장 완료");
-                    main.setStatusText("전체 텍스트 복사됨!", "copy");
-                })
-                .catch(err => {
-                    console.error("클립보드 복사 실패:", err);
-                });
+        // 현재 세션에 단어가 있는 경우에만 문장 완성
+        if (this.currentPredictedWords.length > 0) {
+            // start를 제외한 단어들로 문장 구성
+            const wordsOnly = this.currentPredictedWords.filter(w => w !== "start");
+            const fullText = wordsOnly.join(' ') + (wordsOnly.length > 0 ? '.' : '');
+            this.translationText.innerText = fullText;
+            
+            // 클립보드 복사 (텍스트가 있을 때만)
+            if (fullText.trim() && navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(fullText)
+                    .then(() => {
+                        console.log("클립보드에 저장 완료");
+                        main.setStatusText("전체 텍스트 복사됨!", "copy");
+                    })
+                    .catch(err => {
+                        console.error("클립보드 복사 실패:", err);
+                    });
+            }
+            
+            // 세션 종료 후 배열 초기화
+            setTimeout(() => {
+                this.clearPara();
+            }, 1000);
         }
         
         // 제스처 카드 표시
         this.displayGestureCard(gestureCard, gestureAccuracy);
-        
-        // 세션 종료 후 배열 초기화 (딜레이 단축)
-        setTimeout(() => {
-            this.clearPara();
-        }, 1000);
-        
-    } else {
-        // 일반 단어 처리
-        console.log(`일반 단어 ${word} 추가`);
-        this.currentPredictedWords.push(word);
-        
-        // start를 제외한 단어들만 화면에 표시
-        const wordsOnly = this.currentPredictedWords.filter(w => w !== "start");
-        this.translationText.innerText = wordsOnly.join(' ');
-        
-        // 제스처 카드 표시
-        this.displayGestureCard(gestureCard, gestureAccuracy);
-        
-        // 음성 출력
-        this.speak(word);
+        return;
     }
+
+    // 일반 단어 처리 - start 제스처 없이도 가능하도록 수정
+    console.log(`일반 단어 ${word} 추가`);
+    
+    // 배열이 비어있으면 새로운 세션 시작 (start 없이도)
+    if (this.currentPredictedWords.length == 0) {
+        console.log(`새로운 세션 시작 (start 없이): ${word}`);
+        this.translationText.innerText = '';
+    }
+    
+    this.currentPredictedWords.push(word);
+    
+    // start를 제외한 단어들만 화면에 표시
+    const wordsOnly = this.currentPredictedWords.filter(w => w !== "start");
+    this.translationText.innerText = wordsOnly.join(' ');
+    
+    // 제스처 카드 표시
+    this.displayGestureCard(gestureCard, gestureAccuracy);
+    
+    // 음성 출력
+    this.speak(word);
     
     console.log(`처리 후 배열:`, this.currentPredictedWords);
     console.log(`화면 텍스트:`, this.translationText.innerText);
