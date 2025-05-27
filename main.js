@@ -41,7 +41,12 @@ class Main {
   constructor() {
     // Initialize variables for display as well as prediction purposes
     this.lastPredictionTime = {}; // 각 단어별 마지막 예측 시간 저장
-    this.predictionDelay = 3000; // 3초 딜레이 (밀리초)
+    this.predictionDelay = 2000; // 2초 딜레이로 단축 (밀리초)
+    this.gestureBuffer = {}; // 제스처 버퍼 추가
+    this.bufferDuration = 500; // 500ms 버퍼 시간
+    this.lastGestureTime = 0; // 마지막 제스처 감지 시간
+    this.gestureHoldTime = 300; // 제스처를 유지해야 하는 최소 시간 (ms)
+    
     this.exampleCountDisplay = [];
     this.checkMarks = [];
     this.gestureCards = [];
@@ -50,11 +55,11 @@ class Main {
     this.previousPrediction = -1;
     this.currentPredictedWords = [];
 
-    // Variables to restrict prediction rate
+    // Variables to restrict prediction rate - 성능 개선
     this.now;
     this.then = Date.now();
     this.startTime = this.then;
-    this.fps = 5; //framerate - number of prediction per second
+    this.fps = 10; // FPS를 10으로 증가 (더 빠른 반응)
     this.fpsInterval = 1000 / this.fps;
     this.elapsed = 0;
 
@@ -494,39 +499,112 @@ class Main {
     this.pred = requestAnimationFrame(this.predict.bind(this));
   }
 
+  // 제스처 안정성 검사 함수 추가
+  isGestureStable(word, confidence, currentTime) {
+    if (!this.gestureBuffer[word]) {
+      this.gestureBuffer[word] = {
+        firstDetection: currentTime,
+        lastDetection: currentTime,
+        detectionCount: 1,
+        totalConfidence: confidence
+      };
+      return false;
+    }
+
+    const buffer = this.gestureBuffer[word];
+    const timeSinceFirst = currentTime - buffer.firstDetection;
+    
+    // 제스처가 일정 시간 동안 지속적으로 감지되었는지 확인
+    if (timeSinceFirst >= this.gestureHoldTime) {
+      buffer.detectionCount++;
+      buffer.totalConfidence += confidence;
+      buffer.lastDetection = currentTime;
+      
+      // 평균 신뢰도가 임계값을 넘고, 충분히 감지되었으면 안정적인 제스처로 판단
+      const avgConfidence = buffer.totalConfidence / buffer.detectionCount;
+      if (avgConfidence > confidenceThreshold && buffer.detectionCount >= 3) {
+        // 버퍼 초기화
+        delete this.gestureBuffer[word];
+        return true;
+      }
+    } else {
+      buffer.detectionCount++;
+      buffer.totalConfidence += confidence;
+      buffer.lastDetection = currentTime;
+    }
+
+    return false;
+  }
+
+  // 오래된 버퍼 정리 함수
+  cleanOldBuffers(currentTime) {
+    Object.keys(this.gestureBuffer).forEach(word => {
+      const buffer = this.gestureBuffer[word];
+      if (currentTime - buffer.lastDetection > this.bufferDuration) {
+        delete this.gestureBuffer[word];
+      }
+    });
+  }
+
   /*This function predicts the class of the gesture and returns the predicted text if its above a set threshold.*/
   predict() {
     this.now = Date.now();
     this.elapsed = this.now - this.then;
+    
     if (this.elapsed > this.fpsInterval) {
         this.then = this.now - this.elapsed % this.fpsInterval;
+        
         if (this.videoPlaying) {
             const exampleCount = this.knn.getClassExampleCount();
             const image = dl.fromPixels(this.video);
+            
             if (Math.max(...exampleCount) > 0) {
                 this.knn.predictClass(image)
                     .then((res) => {
+                        const currentTime = Date.now();
+                        
+                        // 오래된 버퍼 정리
+                        this.cleanOldBuffers(currentTime);
+                        
+                        let gestureDetected = false;
+                        
                         for (let i = 0; i < words.length; i++) {
                             if (res.classIndex == i && res.confidences[i] > confidenceThreshold) {
-                                const currentTime = Date.now();
-                                const lastTime = this.lastPredictionTime[words[i]] || 0;
+                                gestureDetected = true;
+                                const word = words[i];
+                                const lastTime = this.lastPredictionTime[word] || 0;
                                 const timeDifference = currentTime - lastTime;
                                 
-                                console.log(`단어: ${words[i]}, 신뢰도: ${res.confidences[i].toFixed(2)}, 딜레이: ${timeDifference}ms`);
-                                
+                                // 딜레이 체크
                                 if (timeDifference > this.predictionDelay) {
-                                    console.log(`${words[i]} 예측 실행!`);
-                                    this.setStatusText("Status: Predicting!", "predict");
-                                    this.predictionOutput.textOutput(words[i], this.gestureCards[i], res.confidences[i] * 100);
-                                    this.lastPredictionTime[words[i]] = currentTime;
+                                    // 제스처 안정성 검사
+                                    if (this.isGestureStable(word, res.confidences[i], currentTime)) {
+                                        console.log(`${word} 안정적인 제스처 감지! 신뢰도: ${res.confidences[i].toFixed(2)}`);
+                                        this.setStatusText("Status: Predicting!", "predict");
+                                        this.predictionOutput.textOutput(word, this.gestureCards[i], res.confidences[i] * 100);
+                                        this.lastPredictionTime[word] = currentTime;
+                                    }
                                 } else {
                                     const remainingTime = this.predictionDelay - timeDifference;
-                                    console.log(`${words[i]} 딜레이 중... 남은 시간: ${remainingTime}ms`);
-                                    this.setStatusText(`Wait ${Math.ceil(remainingTime/1000)}s for "${words[i]}"`, "predict");
+                                    this.setStatusText(`Wait ${Math.ceil(remainingTime/1000)}s for "${word}"`, "predict");
                                 }
+                                break; // 첫 번째 매칭되는 제스처만 처리
                             }
                         }
-                    }).then(() => image.dispose())
+                        
+                        // 제스처가 감지되지 않으면 상태 업데이트
+                        if (!gestureDetected) {
+                            this.setStatusText("Status: Ready to Predict!", "predict");
+                        }
+                    })
+                    .then(() => {
+                        // 메모리 해제 최적화
+                        image.dispose();
+                    })
+                    .catch((error) => {
+                        console.error("Prediction error:", error);
+                        image.dispose();
+                    });
             } else {
                 image.dispose();
             }
@@ -541,6 +619,10 @@ class Main {
     this.setStatusText("Status: Paused Predicting", "predict");
     cancelAnimationFrame(this.pred);
     this.previousKnn = this.knn;
+    
+    // 버퍼 초기화
+    this.gestureBuffer = {};
+    this.lastPredictionTime = {};
   }
 
   // if predict button is actually a back to training button, stop translation and recreate training UI
@@ -667,13 +749,13 @@ class PredictionOutput {
     // start 제스처 처리
     if (word == 'start') {
         this.clearPara();
-        this.currentPredictedWords.push(word); // start도 배열에 추가
+        this.currentPredictedWords.push(word);
         this.translationText.innerText = '';
         console.log(`start 제스처 처리됨, 배열:`, this.currentPredictedWords);
         
         // 제스처 카드 표시
         this.displayGestureCard(gestureCard, gestureAccuracy);
-        return; // start는 화면에 표시하지 않음
+        return;
     }
 
     // 첫 단어가 start가 아니면 리턴
@@ -687,25 +769,28 @@ class PredictionOutput {
         console.log(`stop 제스처 처리`);
         // start를 제외한 단어들로 문장 구성
         const wordsOnly = this.currentPredictedWords.filter(w => w !== "start");
-        const fullText = wordsOnly.join(' ') + '.';
+        const fullText = wordsOnly.join(' ') + (wordsOnly.length > 0 ? '.' : '');
         this.translationText.innerText = fullText;
         
-        // 클립보드 복사
-        if (navigator.clipboard && navigator.clipboard.writeText) {
+        // 클립보드 복사 (텍스트가 있을 때만)
+        if (fullText.trim() && navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(fullText)
                 .then(() => {
                     console.log("클립보드에 저장 완료");
                     main.setStatusText("전체 텍스트 복사됨!", "copy");
+                })
+                .catch(err => {
+                    console.error("클립보드 복사 실패:", err);
                 });
         }
         
         // 제스처 카드 표시
         this.displayGestureCard(gestureCard, gestureAccuracy);
         
-        // 세션 종료 후 배열 초기화
+        // 세션 종료 후 배열 초기화 (딜레이 단축)
         setTimeout(() => {
             this.clearPara();
-        }, 2000);
+        }, 1000);
         
     } else {
         // 일반 단어 처리
@@ -755,7 +840,7 @@ class PredictionOutput {
     console.log(`clearPara 호출됨`);
     this.translationText.innerText = '';
     main.previousPrediction = -1;
-    this.currentPredictedWords = []; // empty words in this query
+    this.currentPredictedWords = [];
     this.translatedCard.innerHTML = " ";
     console.log(`clearPara 완료 - 배열 초기화됨`);
   }
@@ -764,25 +849,27 @@ class PredictionOutput {
   It copies the translated text to the user's clipboard*/
   copyTranslation() {
     this.translationHolder.addEventListener('mousedown', () => {
-      main.setStatusText("Text Copied!", "copy");
-      const el = document.createElement('textarea'); // Create a <textarea> element
-      el.value = this.translationText.innerText; // Set its value to the string that you want copied
-      el.setAttribute('readonly', ''); // Make it readonly to be tamper-proof
-      el.style.position = 'absolute';
-      el.style.left = '-9999px'; // Move outside the screen to make it invisible
-      document.body.appendChild(el); // Append the <textarea> element to the HTML document
-      const selected =
-        document.getSelection().rangeCount > 0 // Check if there is any content selected previously
-        ?
-        document.getSelection().getRangeAt(0) // Store selection if found
-        :
-        false; // Mark as false to know no selection existed before
-      el.select(); // Select the <textarea> content
-      document.execCommand('copy'); // Copy - only works as a result of a user action (e.g. click events)
-      document.body.removeChild(el); // Remove the <textarea> element
-      if (selected) { // If a selection existed before copying
-        document.getSelection().removeAllRanges(); // Unselect everything on the HTML document
-        document.getSelection().addRange(selected); // Restore the original selection
+      if (this.translationText.innerText.trim()) {
+        main.setStatusText("Text Copied!", "copy");
+        const el = document.createElement('textarea');
+        el.value = this.translationText.innerText;
+        el.setAttribute('readonly', '');
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        document.body.appendChild(el);
+        const selected =
+          document.getSelection().rangeCount > 0
+          ?
+          document.getSelection().getRangeAt(0)
+          :
+          false;
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        if (selected) {
+          document.getSelection().removeAllRanges();
+          document.getSelection().addRange(selected);
+        }
       }
     });
   }
@@ -790,13 +877,19 @@ class PredictionOutput {
   /*This function speaks out the user's gestures. In video call mode, it speaks out the other
   user's words.*/
   speak(word) {
+    if (this.synth.speaking) {
+      this.synth.cancel(); // 이전 음성 중단
+    }
+    
     var utterThis = new SpeechSynthesisUtterance(word);
 
     utterThis.onerror = function (evt) {
-      console.log("Error speaking");
+      console.log("Error speaking:", evt.error);
     };
 
-    utterThis.voice = this.voices[this.selectedVoice];
+    if (this.voices[this.selectedVoice]) {
+      utterThis.voice = this.voices[this.selectedVoice];
+    }
     utterThis.pitch = this.pitch;
     utterThis.rate = this.rate;
 
