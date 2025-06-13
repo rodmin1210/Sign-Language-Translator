@@ -13,7 +13,7 @@ app.use(express.static(__dirname));
 app.use(express.json());
 
 // 데이터 저장 엔드포인트
-app.post('/save', (req, res) => {
+app.post('/save-data', (req, res) => {
   const { id, data } = req.body;
   const filePath = path.join(DATA_DIR, `${id}.json`);
   fs.writeFileSync(filePath, JSON.stringify(data));
@@ -21,7 +21,7 @@ app.post('/save', (req, res) => {
 });
 
 // 데이터 불러오기 엔드포인트
-app.get('/load/:id', (req, res) => {
+app.get('/load-data/:gestureName', (req, res) => {
   const filePath = path.join(DATA_DIR, `${req.params.id}.json`);
   if(fs.existsSync(filePath)){
     res.json(JSON.parse(fs.readFileSync(filePath)));
