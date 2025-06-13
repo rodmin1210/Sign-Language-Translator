@@ -17,16 +17,10 @@
     "build"
   ],
   "browserify": {
-    "transform": [
-      [
-        "babelify",
-        {
-          "presets": [
-            "es2015"
-          ],
-          "plugins": [
-            "syntax-async-functions",
-            "transform-regenerator"
+  "transform": [
+    ["babelify", {
+      "presets": ["es2015"],
+      "plugins": ["syntax-async-functions", "transform-regenerator"
           ]
         }
       ]
