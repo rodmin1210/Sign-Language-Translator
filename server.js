@@ -21,7 +21,7 @@ app.post('/save-data', (req, res) => {
 });
 
 // 데이터 불러오기 엔드포인트
-app.get('/load-data/:gestureName', (req, res) => {
+app.get('/load-data/:user123', (req, res) => {
   const filePath = path.join(DATA_DIR, `${req.params.id}.json`);
   if(fs.existsSync(filePath)){
     res.json(JSON.parse(fs.readFileSync(filePath)));
