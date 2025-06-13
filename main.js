@@ -909,37 +909,54 @@ window.addEventListener('load', () => {
   main = new Main()
 });
 
-// 저장 함수
+// 저장 함수 (서버 엔드포인트와 파라미터명 일치화)
+// Save function
 async function saveData() {
   const trainingData = {
-    gesture: '안녕하세요', 
-    frames: [/* 웹캠 프레임 데이터 */]
+    gesture: 'hello',
+    frames: [/* webcam frame data */],
+    timestamp: new Date().toISOString()
   };
-  
+
   try {
-    await fetch('/save', {
+    const response = await fetch('/save-data', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ 
-        id: 'user123', 
-        data: trainingData 
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': 'YOUR_CSRF_TOKEN' // optional
+      },
+      body: JSON.stringify({
+        gestureName: 'user123',
+        data: trainingData
       })
     });
-    alert('저장 완료!');
+
+    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+    alert('Save successful');
   } catch (error) {
-    console.error('저장 실패:', error);
+    console.error('Save failed:', error);
+    alert('Save failed. Check console.');
   }
 }
 
-// 불러오기 함수
+// Load function
 async function loadData() {
   try {
-    const response = await fetch('/load/user123');
-    return await response.json();
+    const response = await fetch('/load-data/user123');
+    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+    const data = await response.json();
+    console.log('Loaded data:', data);
+    return data;
   } catch (error) {
-    console.error('불러오기 실패:', error);
+    console.error('Load failed:', error);
+    alert('Load failed');
+    return null;
   }
 }
 
-// 버튼 이벤트 연결
-document.getElementById('saveBtn').addEventListener('click', saveData);
+// Button event
+document.getElementById('doneRetrain').addEventListener('click', async () => {
+  document.getElementById('loadingIndicator').style.display = 'block';
+  await saveData();
+  document.getElementById('loadingIndicator').style.display = 'none';
+});
