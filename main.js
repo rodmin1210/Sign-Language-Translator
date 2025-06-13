@@ -909,37 +909,37 @@ window.addEventListener('load', () => {
   main = new Main()
 });
 
-// 데이터 저장 함수
-async function saveTrainingData(gestureName, data) {
+// 저장 함수
+async function saveData() {
+  const trainingData = {
+    gesture: '안녕하세요', 
+    frames: [/* 웹캠 프레임 데이터 */]
+  };
+  
   try {
-    const response = await fetch('/save-data', {
+    await fetch('/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gestureName, data })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ 
+        id: 'user123', 
+        data: trainingData 
+      })
     });
-    console.log('Data saved successfully');
+    alert('저장 완료!');
   } catch (error) {
-    console.error('Save failed:', error);
+    console.error('저장 실패:', error);
   }
 }
 
-// 데이터 불러오기 함수
-async function loadTrainingData(gestureName) {
+// 불러오기 함수
+async function loadData() {
   try {
-    const response = await fetch(`/load-data/${gestureName}`);
+    const response = await fetch('/load/user123');
     return await response.json();
   } catch (error) {
-    console.error('Load failed:', error);
-    return null;
+    console.error('불러오기 실패:', error);
   }
 }
 
-// 예시: Done Retrain 버튼 클릭 시 데이터 저장
-document.getElementById('doneRetrain').addEventListener('click', () => {
-  // 훈련 데이터를 객체로 변환
-  const gestureName = 'customGesture'; // 실제로는 사용자가 입력한 이름으로 변경
-  const data = { /* 훈련된 데이터 예시: { images: [...], labels: [...] } */ };
-  // 실제로는 main.js에서 훈련된 데이터를 가져와야 함
-  // 예시: const data = main.knn.getClassExampleCount(); // 실제로는 저장 가능한 형태로 변환 필요
-  saveTrainingData(gestureName, data);
-});
+// 버튼 이벤트 연결
+document.getElementById('saveBtn').addEventListener('click', saveData);
