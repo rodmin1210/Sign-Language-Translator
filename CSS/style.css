@@ -481,3 +481,18 @@ label {
   border-radius: 3px;
   vertical-align: middle;
 }
+
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>수화 번역 AI</title>
+  <script src="main.js"></script>
+</head>
+<body>
+  <!-- 웹캠, 결과 표시 등 기존 코드 -->
+  <button id="doneRetrain">훈련 완료</button>
+</body>
+</html>
