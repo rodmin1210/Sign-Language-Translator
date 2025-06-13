@@ -908,3 +908,38 @@ var main = null;
 window.addEventListener('load', () => {
   main = new Main()
 });
+
+// 데이터 저장 함수
+async function saveTrainingData(gestureName, data) {
+  try {
+    const response = await fetch('/save-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gestureName, data })
+    });
+    console.log('Data saved successfully');
+  } catch (error) {
+    console.error('Save failed:', error);
+  }
+}
+
+// 데이터 불러오기 함수
+async function loadTrainingData(gestureName) {
+  try {
+    const response = await fetch(`/load-data/${gestureName}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Load failed:', error);
+    return null;
+  }
+}
+
+// 예시: Done Retrain 버튼 클릭 시 데이터 저장
+document.getElementById('doneRetrain').addEventListener('click', () => {
+  // 훈련 데이터를 객체로 변환
+  const gestureName = 'customGesture'; // 실제로는 사용자가 입력한 이름으로 변경
+  const data = { /* 훈련된 데이터 예시: { images: [...], labels: [...] } */ };
+  // 실제로는 main.js에서 훈련된 데이터를 가져와야 함
+  // 예시: const data = main.knn.getClassExampleCount(); // 실제로는 저장 가능한 형태로 변환 필요
+  saveTrainingData(gestureName, data);
+});
